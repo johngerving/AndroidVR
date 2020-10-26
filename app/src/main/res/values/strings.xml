@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">AndroidVR</string>
+    <string name="value_format">%1$.2f</string>
+</resources>
