@@ -124,46 +124,18 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         Quaternion gyroQuaternion = new Quaternion(0.0f, 0.0f, 0.0f, 0.0f);
 
-
         if(timestamp != 0) {
             dt = (event.timestamp - timestamp) * NS2S;
-            if(!isOrientationInitialized) {
-                previousFusedQuaternion = accQuaternion;
-                isOrientationInitialized = true;
-            }
             Quaternion gyroDeltaQ = gyroToQuaternionDelta(mGyroscopeData, dt);
 
-            fusedQuaternion = new Quaternion(previousFusedQuaternion);
             fusedQuaternion.multiply(gyroDeltaQ);
 
-            invFusedQuaternion = new Quaternion(fusedQuaternion);
-            invFusedQuaternion.inverse();
-
-            estimatedGravity = new Vector3(0, 0, -1);
-            estimatedGravity.applyQuaternion(invFusedQuaternion);
-            estimatedGravity.normalize();
-
-            if(measuredGravity == null) {
-                measuredGravity = new Vector3(0, 0, -1);
-            }
-            deltaQ = new Quaternion(0.0f, 0.0f, 0.0f, 0.0f);
-            deltaQ.setFromUnitVectors(estimatedGravity, measuredGravity);
-            deltaQ.inverse();
-
-            Quaternion targetQ = new Quaternion(0.0f, 0.0f, 0.0f, 0.0f);
-            targetQ = new Quaternion(fusedQuaternion);
-            targetQ.multiply(deltaQ);
-
-
-
-            fusedQuaternion.slerp(targetQ, 1.0f - 0.98f);
+            fusedQuaternion.slerp(accQuaternion, 0.03f);
 
             previousFusedQuaternion = new Quaternion(fusedQuaternion);
 
             float[] orientationEuler = new float[3];
             orientationEuler = quaternionToEuler(fusedQuaternion);
-
-
 
             mTextSensorAzimuth.setText(getResources().getString(
                     R.string.value_format, orientationEuler[0]));
@@ -173,9 +145,9 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                     R.string.value_format, orientationEuler[2]));
         }
         timestamp = event.timestamp;
-        mGyroscopeData[0] = mPreviousGyroscopeData[0];
-        mGyroscopeData[1] = mPreviousGyroscopeData[1];
-        mGyroscopeData[2] = mPreviousGyroscopeData[2];
+        for(int i = 0; i < 3; i++) {
+            mPreviousGyroscopeData[i] = mGyroscopeData[i];
+        }
     }
 
     @Override
@@ -229,6 +201,10 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         double siny_cosp = 2 * (q.getW() * q.getK() + q.getI() * q.getJ());
         double cosy_cosp = 1 - 2 * (q.getJ() * q.getJ() + q.getK() * q.getK());
         angles[0] = (float) Math.atan2(siny_cosp, cosy_cosp);
+
+        for(int n = 0; n < 3; n++) {
+            angles[n] = (float) Math.toDegrees(angles[n]);
+        }
 
         return angles;
     }
