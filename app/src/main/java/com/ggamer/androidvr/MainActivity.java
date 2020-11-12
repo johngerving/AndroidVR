@@ -29,6 +29,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private float[] mGyroscopeData = new float[3];
     private float[] mPreviousGyroscopeData = new float[3];
 
+    private final float[] deltaRotationVector = new float[4];
+
     // Quaternions for current gyro and accel orientations
     Quaternion gyroQuaternion = new Quaternion(0.0f, 0.0f, 0.0f, 0.0f);
     Quaternion accQuaternion;
@@ -74,11 +76,11 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         // Check if sensors are available on device - if so, register sensor listener
         if(mSensorAccelerometer != null) {
-            mSensorManager.registerListener(this, mSensorAccelerometer, SensorManager.SENSOR_DELAY_FASTEST);
+            mSensorManager.registerListener(this, mSensorAccelerometer, SensorManager.SENSOR_DELAY_NORMAL);
         }
 
         if(mSensorMagnetometer != null) {
-            mSensorManager.registerListener(this, mSensorMagnetometer, SensorManager.SENSOR_DELAY_FASTEST);
+            mSensorManager.registerListener(this, mSensorMagnetometer, SensorManager.SENSOR_DELAY_NORMAL);
         }
 
         if(mSensorGyroscope != null) {
@@ -122,8 +124,32 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         if(timestamp != 0) {
             // Determine time since last measurement was taken
-            dt = (event.timestamp - timestamp);
-            Quaternion gyroDeltaQ = gyroToQuaternionDelta(mGyroscopeData, dt);
+            dt = (event.timestamp - timestamp) * NS2S;
+
+            float axisX = mGyroscopeData[0];
+            float axisY = mGyroscopeData[1];
+            float axisZ = mGyroscopeData[2];
+
+            float omegaMagnitude = (float) Math.sqrt(axisX*axisX + axisY*axisY + axisZ*axisZ);
+
+            if(omegaMagnitude > EPSILON) {
+                axisX /= omegaMagnitude;
+                axisY /= omegaMagnitude;
+                axisZ /= omegaMagnitude;
+            }
+
+            float thetaOverTwo = omegaMagnitude * dt / 2.0f;
+            float sinThetaOverTwo = (float) Math.sin(thetaOverTwo);
+            float cosThetaOverTwo = (float) Math.cos(thetaOverTwo);
+            deltaRotationVector[0] = sinThetaOverTwo * axisX;
+            deltaRotationVector[1] = sinThetaOverTwo * axisY;
+            deltaRotationVector[2] = sinThetaOverTwo * axisZ;
+            deltaRotationVector[3] = cosThetaOverTwo;
+
+            float[] deltaRotationMatrix = new float[9];
+            SensorManager.getRotationMatrixFromVector(deltaRotationMatrix, deltaRotationVector);
+
+            Quaternion gyroDeltaQ = rotationMatrixToQuaternion(deltaRotationMatrix);
 
             fusedQuaternion.multiply(gyroDeltaQ);
 
