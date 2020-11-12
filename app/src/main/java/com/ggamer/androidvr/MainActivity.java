@@ -12,7 +12,7 @@ import android.os.Bundle;
 import android.widget.TextView;
 
 public class MainActivity extends AppCompatActivity implements SensorEventListener {
-
+    // Create sensor manager and sensors - accelerometer, magnetometer, and gyroscope
     private SensorManager mSensorManager;
 
     private Sensor mSensorAccelerometer;
@@ -23,34 +23,31 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private TextView mTextSensorPitch;
     private TextView mTextSensorRoll;
 
-    private static final float VALUE_DRIFT = 0.05f;
-
+    // Arrays to hold information from sensors
     private float[] mAccelerometerData = new float[3];
     private float[] mMagnetometerData = new float[3];
     private float[] mGyroscopeData = new float[3];
     private float[] mPreviousGyroscopeData = new float[3];
 
+    // Quaternions for current gyro and accel orientations
+    Quaternion gyroQuaternion = new Quaternion(0.0f, 0.0f, 0.0f, 0.0f);
+    Quaternion accQuaternion;
+
+    // Quaternion holding the current orientation; result of sensory fusion with complementary filter
     private Quaternion fusedQuaternion = new Quaternion(.0f, 0.0f, 0.0f, 0.0f);
     private Quaternion previousFusedQuaternion = new Quaternion(0.0f, 0.0f, 0.0f, 0.0f);
 
-    private Quaternion invFusedQuaternion = new Quaternion(0.0f, 0.0f, 0.0f, 0.0f);
-
+    // Quaternion with the change in rotation determined by gyroscope measurements
     private Quaternion deltaQ;
 
     private boolean isOrientationInitialized = false;
 
-    private Vector3 estimatedGravity;
-    private Vector3 measuredGravity;
-
+    // Time since last measurement
     private float dt = 0.0f;
 
     private static final float NS2S = 1.0f / 1000000000.0f;
-    private final float[] deltaRotationVector = new float[4];
     private float timestamp;
     final float EPSILON = 0.000001f;
-
-    private float[] gyroscopeOrientation = {0.0f, 0.0f, 0.0f};
-
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -63,6 +60,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         mTextSensorPitch = (TextView) findViewById(R.id.value_pitch);
         mTextSensorRoll = (TextView) findViewById(R.id.value_roll);
 
+        // Initialize sensor manager and sensors
         mSensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         mSensorAccelerometer = mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
         mSensorMagnetometer = mSensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD);
@@ -74,12 +72,13 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     protected void onStart() {
         super.onStart();
 
+        // Check if sensors are available on device - if so, register sensor listener
         if(mSensorAccelerometer != null) {
-            mSensorManager.registerListener(this, mSensorAccelerometer, SensorManager.SENSOR_DELAY_NORMAL);
+            mSensorManager.registerListener(this, mSensorAccelerometer, SensorManager.SENSOR_DELAY_FASTEST);
         }
 
         if(mSensorMagnetometer != null) {
-            mSensorManager.registerListener(this, mSensorMagnetometer, SensorManager.SENSOR_DELAY_NORMAL);
+            mSensorManager.registerListener(this, mSensorMagnetometer, SensorManager.SENSOR_DELAY_FASTEST);
         }
 
         if(mSensorGyroscope != null) {
@@ -99,11 +98,10 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         int sensorType = event.sensor.getType();
 
+        // Check if sensor readings are available - if so, copy them to respective array
         switch (sensorType) {
             case Sensor.TYPE_ACCELEROMETER:
                 mAccelerometerData = event.values.clone();
-                measuredGravity = new Vector3(mAccelerometerData[0], mAccelerometerData[1], mAccelerometerData[2]);
-                measuredGravity.normalize();
                 break;
             case Sensor.TYPE_MAGNETIC_FIELD:
                 mMagnetometerData = event.values.clone();
@@ -115,17 +113,16 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 return;
         }
 
+        // Convert accelerometer and magnetometer arrays into rotation matrix
         float[] rotationMatrix = new float[9];
         SensorManager.getRotationMatrix(rotationMatrix, null, mAccelerometerData, mMagnetometerData);
 
-
-        Quaternion accQuaternion;
+        // Convert rotation matrix to quaternion
         accQuaternion = rotationMatrixToQuaternion(rotationMatrix);
 
-        Quaternion gyroQuaternion = new Quaternion(0.0f, 0.0f, 0.0f, 0.0f);
-
         if(timestamp != 0) {
-            dt = (event.timestamp - timestamp) * NS2S;
+            // Determine time since last measurement was taken
+            dt = (event.timestamp - timestamp);
             Quaternion gyroDeltaQ = gyroToQuaternionDelta(mGyroscopeData, dt);
 
             fusedQuaternion.multiply(gyroDeltaQ);
